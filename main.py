@@ -13,13 +13,14 @@ LOG_PATH = BASE_PATH / 'log'
 DU_SB_weights = LOG_PATH / 'DU-SB_T=10_lr=0.0001.json'
 
 
-# run_cfg = 'DU_SB'
-run_cfg = 'baseline'
+run_cfg = 'DU_SB'
+# run_cfg = 'baseline'
 if run_cfg.startswith('DU_SB'):
     with open(DU_SB_weights, 'r', encoding='utf-8') as fh:
         params = json.load(fh)
         deltas: List[float] = params['deltas']
         eta: float = params['eta']
+        a: float = params['a']
 
 J_h = Tuple[ndarray, ndarray]
 
@@ -138,14 +139,15 @@ def solver_qaia_lib(qaia_cls, J:ndarray, h:ndarray) -> ndarray:
         energy = solver.calc_energy()   # [1, B]
         opt_index = np.argmin(energy)
     else:
+        energy = solver.calc_energy()
         opt_index = 0
     solution = np.sign(solver.x[:, opt_index])  # [rb*N], vset {-1, 1}
     return solution
 
 def solver_DU_SB(J:ndarray, h:ndarray) -> ndarray:
-    global deltas, eta
+    global deltas, eta, a
     bs = 1
-    solver = DUSB(J, h, deltas, eta, batch_size=bs)
+    solver = DUSB(J, h, deltas, eta, a, batch_size=bs)
     solver.update()                     # [rb*N, B]
     if bs > 1:
         energy = solver.calc_energy()   # [1, B]

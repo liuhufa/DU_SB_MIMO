@@ -17,7 +17,7 @@ sw = lambda x: x * σ(x)
 # for inference
 class DUSB(BSB):
 
-    def __init__(self, J:ndarray, h:ndarray, deltas:List[float], eta:float, x:ndarray=None, batch_size:int=100):
+    def __init__(self, J:ndarray, h:ndarray, deltas:List[float], eta:float, a:List[float], x:ndarray=None, batch_size:int=100):
         super().__init__(J, h, x, len(deltas), batch_size, dt=-1, xi=None)
 
         # the pretrained optimal parameters :)
@@ -29,7 +29,7 @@ class DUSB(BSB):
         #self.c_0: float = 2 * np.sqrt((self.N - 1) / np.power(self.J, 2).sum())
         # from qaia lib
         self.c_0 = self.xi * self.η
-        self.a_m1 = self.p - 1
+        self.a_m1 = np.array(a) - 1
 
     def update(self):
         # Eq. 11 ~ 14, trainable parameters are $Δ_k$ (`dt`) and $η$

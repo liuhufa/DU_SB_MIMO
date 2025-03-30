@@ -286,6 +286,7 @@ def train(args):
     params = {
       'deltas': model.Δ.detach().cpu().numpy().tolist(),
       'eta':    model.η.detach().cpu().item(),
+      'a':      model.a.detach().cpu().numpy().tolist(),
     }
     print('params:', params)
 

@@ -324,6 +324,27 @@
           </mappings>
         </serverdata>
       </paths>
+      <paths name="dell@192.168.1.106:22 password (51)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="dell@192.168.1.106:22 password (52)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="dell@192.168.1.106:22 password (53)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="dell@192.168.1.106:22 password (6)">
         <serverdata>
           <mappings>
@@ -381,6 +402,34 @@
         </serverdata>
       </paths>
       <paths name="lab617@10.147.17.143:22 password (13)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="lab617@10.147.17.143:22 password (14)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="lab617@10.147.17.143:22 password (15)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="lab617@10.147.17.143:22 password (16)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="lab617@10.147.17.143:22 password (17)">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />

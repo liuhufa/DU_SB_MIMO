@@ -33,8 +33,8 @@ class DU_SB(nn.Module):
     self.T = T
     self.batch_size = batch_size
     # Eq. 4
-    # 在0到1之间生成线性等间隔张量
-    self.a = torch.linspace(0, 1, T)
+    # 退火值a 初始值为在0到1之间生成线性等间隔张量
+    self.a = Parameter(torch.linspace(0, 1, T), requires_grad=True)
 
     # the T+2 trainable parameters :)
     # 长度为T的一维张量，初始值为1
