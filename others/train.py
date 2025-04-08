@@ -65,21 +65,22 @@ def load_data(limit:int) -> List[Tuple]:
 
     label = data.get("label", None)
     if label is not None:
-      label = label.get("x", None)
+      x = label.get("x", None)
+      obj = label.get("obj_val", None)
     J = -J
     h = -h
     J = torch.tensor(J, dtype=torch.float32, device=device)
     h = torch.tensor(h, dtype=torch.float32, device=device).unsqueeze(1)
-    label = torch.tensor(label, dtype=torch.float32, device=device) if label is not None else None
-
-    dataset.append((J, h, label))
+    x = torch.tensor(x, dtype=torch.float32, device=device) if label is not None else None
+    obj = torch.tensor(obj, dtype=torch.float32, device=device) if label is not None else None
+    dataset.append((J, h, x, obj))
 
   return dataset
 
 def train(args):
   print('device:', device)
   print('hparam:', vars(args))
-  exp_name = f'DU-SB_T={args.n_iter}_lr={args.lr}{"_overfit" if args.overfit else ""}'
+  exp_name = f'DU-SB_T={args.n_iter}_lr={args.lr}'
 
   ''' Data '''
   dataset = load_data(args.limit)
@@ -120,10 +121,11 @@ def train(args):
         random.shuffle(dataset)
       sample = dataset[steps_minor % len(dataset)]
 
-      J, h, bits = sample
+      J, h, bits, obj = sample
 
       spins = model(J, h)
       loss_each = torch.stack([ber_loss(sp, bits, args.loss_fn) for sp in spins])
+      # loss_each = torch.stack([loss_energy(sp, J, h, obj, args.loss_fn) for sp in spins])
       loss = getattr(loss_each, args.agg_fn)()
       loss_for_backward: Tensor = loss / args.grad_acc
       loss_for_backward.backward()
@@ -178,13 +180,30 @@ def ber_loss(spins:Tensor, bits:Tensor, loss_fn:str='mse') -> Tensor:
     pseudo_logits = bits_final * 2 - 1
     return F.binary_cross_entropy_with_logits(pseudo_logits, bits)
 
+def loss_energy(spins:Tensor, J:Tensor, h:Tensor, obj:Tensor, loss_fn:str='mse') -> Tensor:
+  energy = - 0.5 * torch.sum(J * (spins.reshape(-1, 1) * spins)) - torch.sum(h * spins)
+  spins_binary = torch.where(spins >= 0, torch.tensor(1.0, device=spins.device),
+                             torch.tensor(-1.0, device=spins.device))
+  energy_true = - 0.5 * torch.sum(J * (spins_binary.reshape(-1, 1) * spins_binary)) - torch.sum(h * spins_binary)
+  # 根据损失函数类型选择损失计算方法
+  if loss_fn == 'mse':
+    # 使用均方误差 (Mean Squared Error) 计算损失
+    loss = torch.mean((energy - obj) ** 2)
+  elif loss_fn == 'mae':
+    # 使用平均绝对误差 (Mean Absolute Error) 计算损失
+    loss = torch.mean(torch.abs(energy - obj))
+  else:
+    raise ValueError(f"Unsupported loss function: {loss_fn}")
+
+  return loss
+
 if __name__ == '__main__':
   parser = ArgumentParser()
-  parser.add_argument('-T', '--n_iter', default=10, type=int)
+  parser.add_argument('-T', '--n_iter', default=15, type=int)
   parser.add_argument('-B', '--batch_size', default=32, type=int, help='SB candidate batch size')
-  parser.add_argument('--steps', default=30000, type=int)
+  parser.add_argument('--steps', default=60000, type=int)
   parser.add_argument('--loss_fn', default='bce', choices=['mse', 'l1', 'bce'])
-  parser.add_argument('--agg_fn', default='max', choices=['mean', 'max'])
+  parser.add_argument('--agg_fn', default='mean', choices=['mean', 'max'])
   parser.add_argument('--grad_acc', default=1, type=int, help='training batch size')
   parser.add_argument('--lr', default=1e-4, type=float)
   parser.add_argument('--load', help='ckpt to resume')

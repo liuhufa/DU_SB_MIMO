@@ -6,8 +6,12 @@ import numpy as np
 from numpy import ndarray
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from pathlib import Path
 
-
+run_cfg = 'DU_SB'
+BASE_PATH = Path(__file__).parent
+LOG_PATH = BASE_PATH / 'log'
+DU_SB_weights = LOG_PATH / 'DU-SB_T=10_lr=0.0001.json'
 def compute_ber(solution: ndarray, bits: ndarray) -> float:
     '''
     Compute BER for the solution from QAIAs.
@@ -90,7 +94,7 @@ class Judger:
     @staticmethod
     def infer(ising_generator, qaia_mld_solver, H, y, num_bits_per_symbol, snr):
         J, h = ising_generator(H, y, num_bits_per_symbol, snr)
-        bits = qaia_mld_solver(J, h)
+        bits, energy = qaia_mld_solver(J, h, run_cfg, DU_SB_weights)
         return bits
 
     def benchmark(self, ising_gen, qaia_mld_solver):
@@ -114,7 +118,7 @@ class Judger:
             avgber_per_Nt[H.shape[1]].append(ber)
             avgber_per_snr[snr].append(ber)
             avgber_per_nbps[num_bits_per_symbol].append(ber)
-
+        print(f'>> avgber_ZF:{sum(ZF_ber_list)/len(ZF_ber_list)}')
         print('>> avgber_per_Nt:')
         for Nt in sorted(avgber_per_Nt):
             print(f'  {Nt}: {np.asarray(avgber_per_Nt[Nt]).mean()}')
@@ -125,16 +129,28 @@ class Judger:
         for nbps in sorted(avgber_per_nbps):
             print(f'  {nbps}: {np.asarray(avgber_per_nbps[nbps]).mean()}')
 
+        global run_cfg
+        run_cfg = 'baseline'
+        sbber_list = []
+        for i, case in enumerate(tqdm(self.test_cases)):
+            H, y, bits_truth, num_bits_per_symbol, snr, ZF_ber = case
+            sbbits_decode = self.infer(ising_gen, qaia_mld_solver, H, y, num_bits_per_symbol, snr)
+            sbber = compute_ber(sbbits_decode, bits_truth)
+
+            sbber_list.append(sbber)
+
         if 'plot':
             from pathlib import Path
             BASE_PATH = Path(__file__).parent
             LOG_PATH = BASE_PATH / 'log';
             LOG_PATH.mkdir(exist_ok=True)
-            pairs = list(zip(ZF_ber_list, ber_list))
+            pairs = list(zip(ZF_ber_list, ber_list, sbber_list))
             pairs.sort(reverse=True)  # decrease order by ZF_ber
-            ber_list = [ber for ZF_ber, ber in pairs]
-            ZF_ber_list = [ZF_ber for ZF_ber, ber in pairs]
-            plt.plot(ber_list, label='ours')
+            ber_list = [ber for ZF_ber, ber, sbber in pairs]
+            sbber_list = [sbber for ZF_ber, ber, sbber in pairs]
+            ZF_ber_list = [ZF_ber for ZF_ber, ber, sbber in pairs]
+            plt.plot(ber_list, label='DUSB')
+            plt.plot(sbber_list, label='SB')
             plt.plot(ZF_ber_list, label='ZF')
             plt.ylim(0, 0.55)
             plt.legend()

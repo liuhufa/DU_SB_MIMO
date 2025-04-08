@@ -17,7 +17,7 @@
 import numpy as np
 
 from .QAIA import QAIA, OverflowException
-
+import matplotlib.pyplot as plt
 
 class SB(QAIA):
     r"""
@@ -160,6 +160,7 @@ class BSB(SB):  # noqa: N801
 
     # pylint: disable=attribute-defined-outside-init
     def update(self):
+        x_history = []
         """Dynamical evolution based on Modified explicit symplectic Euler method."""
         for i in range(self.n_iter):
             if self.h is None:
@@ -172,7 +173,31 @@ class BSB(SB):  # noqa: N801
             cond = np.abs(self.x) > 1
             self.x = np.where(cond, np.sign(self.x), self.x)          # limit x to vrng [-1, +1]
             self.y = np.where(cond, np.zeros_like(self.x), self.y)    # if |x|==1 is fully annealled, set y to zero
+            # 保存每次迭代的 x
+            x_history.append(self.x.copy())
 
+        """分岔图绘制函数"""
+        # self.plot_bifurcation(x_history)
+
+    def plot_bifurcation(self, x_history):
+        """绘制分岔图：展示 self.x 随迭代的变化情况"""
+        plt.figure(figsize=(10, 6))
+
+        # 绘制每个变量（x 向量的每个元素）随迭代的变化
+        num_vars = self.x.shape[0]  # 变量的数量，即 x 向量的长度
+        colors = plt.cm.jet(np.linspace(0, 1, num_vars))  # 使用 jet 色图为每个变量选择不同颜色
+
+        for j in range(num_vars):
+            # 绘制每个变量的迭代过程
+            x_var_history = [x_iter[j] for x_iter in x_history]  # 获取第 j 个变量的历史
+            plt.plot(range(self.n_iter), x_var_history, label=f"Variable {j + 1}", color=colors[j])
+
+        plt.title("Bifurcation of each variable over iterations")
+        plt.xlabel("Iteration")
+        plt.ylabel("x value")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
 class DSB(SB):  # noqa: N801
     r"""

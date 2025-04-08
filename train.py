@@ -23,6 +23,7 @@ from DU_SB import DU_SB
 from numpy import ndarray
 import tensorflow as tf
 from sionna.mapping import Constellation, Mapper
+from test import compute_ber
 mapper_cache: Dict[int, Mapper] = {}
 constellation_cache: Dict[int, Constellation] = {}
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -121,79 +122,6 @@ def load_data(limit:int) -> List[Tuple]:
       dataset.append([H, y, bits, nbps, SNR])
   return dataset
 
-def compute_ber(solution: ndarray, bits: ndarray) -> float:
-  '''
-  Compute BER for the solution from QAIAs.
-
-  Firstly, both the solution from QAIAs and generated bits should be transformed into gray-coded,
-  and then compute the ber.
-
-  Reference
-  ---------
-  [1] Kim M, Venturelli D, Jamieson K. Leveraging quantum annealing for large MIMO processing in centralized radio access networks.
-      Proceedings of the ACM special interest group on data communication. 2019: 241-255.\
-
-  Input
-  -----
-  solution: [rb*2*Nt, ], np.int
-      The binary array filled with ones and minus ones.
-
-  bits: [Nt, nbps], np.int
-      The binary array filled with ones and zeros.
-  Ouput
-  -----
-  ber: np.float
-      A scalar, the BER.
-  '''
-  solution = solution.astype(np.int32)
-  bits = bits.astype(np.int32)
-
-  # convert the bits from sionna style to constellation style
-  # Sionna QAM16 map: https://nvlabs.github.io/sionna/examples/Hello_World.html
-  '''
-  [sionna-style]
-      1011 1001 0001 0011
-      1010 1000 0000 0010
-      1110 1100 0100 0110
-      1111 1101 0101 0111
-  [constellation-style] i.e. the "gray code" in QuAMax paper
-      0010 0110 1110 1010
-      0011 0111 1111 1011
-      0001 0101 1101 1001
-      0000 0100 1100 1000
-  '''
-  bits_constellation = 1 - np.concatenate([bits[..., 0::2], bits[..., 1::2]], axis=-1)
-
-  # Fig. 2 from arXiv:2001.04014, the QuAMax paper converting QuAMax to gray coded
-  num_bits_per_symbol = bits_constellation.shape[1]
-  rb = num_bits_per_symbol // 2
-  bits_hat = solution.reshape(rb, 2, -1)  # [rb, c=2, Nt]
-  bits_hat = np.concatenate([bits_hat[:, 0], bits_hat[:, 1]], axis=0)  # [2*rb, Nt]
-  bits_hat = bits_hat.T.copy()  # [Nt, 2*rb]
-  bits_hat[bits_hat == -1] = 0  # convert Ising {-1, 1} to QUBO {0, 1}
-  # QuAMax => intermediate code
-  '''
-  [QuAMax-style]
-      0011 0111 1011 1111
-      0010 0110 1010 1110
-      0001 0101 1001 1101
-      0000 0100 1000 1100
-  [intermediate-style]
-      0011 0100 1011 1100
-      0010 0101 1010 1101
-      0001 0110 1001 1110
-      0000 0111 1000 1111
-  '''
-  output_bit = bits_hat.copy()  # copy b[0]
-  index = np.nonzero(bits_hat[:, rb - 1] == 1)[0]  # select even columns
-  bits_hat[index, rb:] = 1 - bits_hat[index, rb:]  # invert bits of high part (flip upside-down)
-  # Differential bit encoding, intermediate code => gray code (constellation-style)
-  for i in range(1, num_bits_per_symbol):  # b[i] = b[i] ^ b[i-1]
-    output_bit[:, i] = np.logical_xor(bits_hat[:, i], bits_hat[:, i - 1])
-  # calc BER
-  ber = np.mean(bits_constellation != output_bit)
-  return ber
-
 def train(args):
   print('device:', device)
   print('hparam:', vars(args))
@@ -243,7 +171,7 @@ def train(args):
         bits, y = make_random_transmit(bits.shape, H, nbps, SNR)
 
       J, h = to_ising(H, y, nbps)
-      spins = model(J, h, nbps)
+      spins = model(J, h)
       loss_each = torch.stack([ber_loss(sp, bits, args.loss_fn) for sp in spins])
       loss = getattr(loss_each, args.agg_fn)()
       loss_for_backward: Tensor = loss / args.grad_acc
@@ -308,10 +236,6 @@ def make_random_transmit(bits_shape:torch.Size, H:Tensor, nbps:int, SNR:int) -> 
 
 def ber_loss(spins:Tensor, bits:Tensor, loss_fn:str='mse') -> Tensor:
   ''' differentiable version of compute_ber() '''
-  if False:
-    from judger import compute_ber
-    assert compute_ber
-
   # convert the bits from sionna style to constellation style
   # Sionna QAM16 map: https://nvlabs.github.io/sionna/examples/Hello_World.html
   bits_constellation = 1 - torch.cat([bits[..., 0::2], bits[..., 1::2]], dim=-1)
@@ -346,7 +270,7 @@ if __name__ == '__main__':
   parser = ArgumentParser()
   parser.add_argument('-T', '--n_iter', default=10, type=int)
   parser.add_argument('-B', '--batch_size', default=32, type=int, help='SB candidate batch size')
-  parser.add_argument('--steps', default=30000, type=int)
+  parser.add_argument('--steps', default=40000, type=int)
   parser.add_argument('--loss_fn', default='bce', choices=['mse', 'l1', 'bce'])
   parser.add_argument('--agg_fn', default='max', choices=['mean', 'max'])
   parser.add_argument('--grad_acc', default=1, type=int, help='training batch size')
