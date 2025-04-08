@@ -9,7 +9,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 run_cfg = 'DU_SB'
-BASE_PATH = Path(__file__).parent
+BASE_PATH = Path.cwd()
 LOG_PATH = BASE_PATH / 'log'
 DU_SB_weights = LOG_PATH / 'DU-SB_T=10_lr=0.0001.json'
 def compute_ber(solution: ndarray, bits: ndarray) -> float:
@@ -106,6 +106,8 @@ class Judger:
         avgber_per_nbps = defaultdict(list)
 
         avgber = 0
+
+        t1 = time()
         for i, case in enumerate(tqdm(self.test_cases)):
             H, y, bits_truth, num_bits_per_symbol, snr, ZF_ber = case
             bits_decode = self.infer(ising_gen, qaia_mld_solver, H, y, num_bits_per_symbol, snr)
@@ -115,33 +117,40 @@ class Judger:
 
             ber_list.append(ber)
             ZF_ber_list.append(ZF_ber)
-            avgber_per_Nt[H.shape[1]].append(ber)
-            avgber_per_snr[snr].append(ber)
-            avgber_per_nbps[num_bits_per_symbol].append(ber)
-        print(f'>> avgber_ZF:{sum(ZF_ber_list)/len(ZF_ber_list)}')
-        print('>> avgber_per_Nt:')
-        for Nt in sorted(avgber_per_Nt):
-            print(f'  {Nt}: {np.asarray(avgber_per_Nt[Nt]).mean()}')
-        print('>> avgber_per_snr:')
-        for snr in sorted(avgber_per_snr):
-            print(f'  {snr}: {np.asarray(avgber_per_snr[snr]).mean()}')
-        print('>> avgber_per_nbps:')
-        for nbps in sorted(avgber_per_nbps):
-            print(f'  {nbps}: {np.asarray(avgber_per_nbps[nbps]).mean()}')
+            # avgber_per_Nt[H.shape[1]].append(ber)
+            # avgber_per_snr[snr].append(ber)
+            # avgber_per_nbps[num_bits_per_symbol].append(ber)
+        t2 = time()
+
+        # print('>> avgber_per_Nt:')
+        # for Nt in sorted(avgber_per_Nt):
+        #     print(f'  {Nt}: {np.asarray(avgber_per_Nt[Nt]).mean()}')
+        # print('>> avgber_per_snr:')
+        # for snr in sorted(avgber_per_snr):
+        #     print(f'  {snr}: {np.asarray(avgber_per_snr[snr]).mean()}')
+        # print('>> avgber_per_nbps:')
+        # for nbps in sorted(avgber_per_nbps):
+        #     print(f'  {nbps}: {np.asarray(avgber_per_nbps[nbps]).mean()}')
 
         global run_cfg
+        avgsbber = 0
         run_cfg = 'baseline'
         sbber_list = []
+        t3 = time()
         for i, case in enumerate(tqdm(self.test_cases)):
             H, y, bits_truth, num_bits_per_symbol, snr, ZF_ber = case
             sbbits_decode = self.infer(ising_gen, qaia_mld_solver, H, y, num_bits_per_symbol, snr)
             sbber = compute_ber(sbbits_decode, bits_truth)
-
+            avgsbber += sbber
+            print(f'[case {i}] ber: {avgsbber}, ref_ber: {ZF_ber}')
             sbber_list.append(sbber)
+        t4 = time()
+
+        # print(f'>> avgber_ZF:{sum(ZF_ber_list)/len(ZF_ber_list)}')
 
         if 'plot':
             from pathlib import Path
-            BASE_PATH = Path(__file__).parent
+            BASE_PATH = Path.cwd()
             LOG_PATH = BASE_PATH / 'log';
             LOG_PATH.mkdir(exist_ok=True)
             pairs = list(zip(ZF_ber_list, ber_list, sbber_list))
@@ -157,11 +166,14 @@ class Judger:
             plt.suptitle('BER')
             plt.tight_layout()
             plt.savefig(LOG_PATH / 'solut.png', dpi=400)
+            plt.show()
             plt.close()
 
         avgber /= len(self.test_cases)
-        return avgber
-
+        avgsbber /= len(self.test_cases)
+        tt1 = t2 - t1
+        tt2 = t4 - t3
+        return avgber, avgsbber, tt1, tt2
 
 if __name__ == "__main__":
     from main import ising_generator, qaia_mld_solver
@@ -174,8 +186,11 @@ if __name__ == "__main__":
         dataset.append([data['H'], data['y'], data['bits'], data['num_bits_per_symbol'], data['SNR'], data['ZF_ber']])
 
     judger = Judger(dataset)
-    t = time()
-    avgber = judger.benchmark(ising_generator, qaia_mld_solver)
-    ts = time() - t
-    print(f'>> time cost: {ts:.2f}')
+
+    avgber, avgsbber, tt1, tt2 = judger.benchmark(ising_generator, qaia_mld_solver)
+    print(f'>> Method: DUSB')
+    print(f'>> time cost: {tt1:.2f}')
     print(f">> avg. BER = {avgber:.5f}")
+    print(f'>> Method: BSB')
+    print(f'>> time cost: {tt2:.2f}')
+    print(f">> avg. BER = {avgsbber:.5f}")
